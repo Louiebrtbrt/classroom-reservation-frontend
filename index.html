@@ -690,7 +690,7 @@ async function loadFollowsFromServer(){
 function doLogout(){
   requestConfirmation({
     title:'Log out?',
-    message:'You\'ll need to log in again to access your workspace.',
+    message:'You\'ll need to Sign in again to access your workspace.',
     actionLabel:'Log out'
   }, performLogout);
 }
@@ -831,7 +831,7 @@ function renderLogin(){
           <div><div class="brand-name">Classroom Reservation</div><div class="brand-school">MC SPACE MANAGEMENT</div></div>
         </div>
         <div class="switcher" aria-label="Account action">
-  <button class="${isLogin?'active':''}" type="button" onclick="switchAuth('login')">Log in</button>
+  <button class="${isLogin?'active':''}" type="button" onclick="switchAuth('login')">Sign in</button>
   <button class="${!isLogin?'active':''}" type="button" onclick="switchAuth('register')">Create account</button>
 </div>
         <div class="login-card">
@@ -840,14 +840,14 @@ function renderLogin(){
             <div>
               <div class="eyebrow">Campus operations</div>
               <div class="plate-title">${isLogin ? 'Welcome back' : 'Create your account'}</div>
-              <div class="plate-sub">${isLogin ? 'Log in to your classroom workspace.' : 'Join your classroom workspace in a few steps.'}</div>
+              <div class="plate-sub">${isLogin ? 'Sign in to start your session.' : 'Join your classroom workspace in a few steps.'}</div>
             </div>
           </div>
           ${VIEW.err ? `<div class="err">${VIEW.err}</div>` : ''}
           ${isLogin ? renderLoginForm() : renderRegisterForm()}
           <div class="switch-line">
             ${isLogin ? `New here? <a onclick="switchAuth('register')">Create an account</a>`
-                      : `Already have an account? <a onclick="switchAuth('login')">Log in</a>`}
+                      : `Already have an account? <a onclick="switchAuth('login')">Sign in</a>`}
           </div>
         </div>  
       </div>
@@ -865,7 +865,7 @@ function renderLoginForm(){
          <button type="button" id="li-pass-toggle" onclick="toggleLoginPasswordVisibility()" aria-label="Show password" style="position:absolute;right:2px;top:50%;transform:translateY(-50%);border:0;background:transparent;padding:8px;cursor:pointer;color:var(--ink-soft);display:grid;place-items:center;">${icon('eyeoff')}</button>
       </div>
     </div>
-    <button class="btn-primary" type="submit">Log in to workspace</button>
+    <button class="btn-primary" type="submit">Sign in to workspace</button>
 </form>
   `;
 }
