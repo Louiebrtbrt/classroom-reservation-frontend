@@ -1413,7 +1413,7 @@ function renderAdminUsers(){
             <td data-label="Username">${u.username}</td>
             <td data-label="Role" style="text-transform:capitalize;">${u.role}</td>
             <td data-label="Action">
-              <div class="action-row">
+              <div class="action-row" style="justify-content:flex-end;">
                 <button class="btn-sm" onclick="openPersonModal(${u.id})">${icon('info')}View info</button>
                 ${u.username!==CURRENT_USER.username
                   ? `<button class="btn-sm danger" onclick="deleteUser('${u.username}')">${icon('trash')}Remove</button>`
@@ -1736,7 +1736,10 @@ function renderTeacherFollowers(){
       ${followers.length === 0 ? `<div class="empty">No one is following you yet.</div>` : followers.map(f => `
         <div class="teacher-list-item">
           <div class="person-row" style="cursor:pointer;" onclick="openPersonModal(${f.student_id})">${userAvatar(SERVER_USERS.find(user => String(user.id) === String(f.student_id)) || { name:f.student_name })}<div><div class="person-name">${f.student_name}</div><div class="person-sub">Following you</div></div></div>
-          <div class="action-row"><button class="btn-sm" onclick="openPersonModal(${f.student_id})">${icon('info')}View info</button></div>
+          <div class="action-row" style="justify-content:flex-end;">
+            <button class="btn-sm" onclick="openPersonModal(${f.student_id})">${icon('info')}View info</button>
+            <button class="btn-sm danger" onclick="rejectFollow(${f.id})">${icon('trash')}Remove</button>
+          </div>
         </div>`).join('')}
     </div>`;
 }
