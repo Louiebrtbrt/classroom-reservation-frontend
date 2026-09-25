@@ -679,6 +679,81 @@ async function loadUsersFromServer(){
     DATA_STATUS.users = false;
   }
 }
+
+let PENDING_TEACHERS = [];
+async function loadPendingTeachersFromServer(){
+  try{
+    const response = await fetch(API_BASE + '/api/users/pending');
+    if(!response.ok) throw new Error('Failed to load pending teachers');
+    PENDING_TEACHERS = await response.json();
+  }catch(error){
+    console.error('Error loading pending teachers:', error);
+  }
+}
+async function approveTeacher(teacherId, teacherName){
+  requestConfirmation({
+    title:'Approve this teacher?',
+    message:`${teacherName} will be able to sign in once approved.`,
+    actionLabel:'Approve',
+    tone:'primary'
+  }, async () => {
+    try{
+      const response = await fetch(`${API_BASE}/api/users/${teacherId}/approve`, { method: 'PUT' });
+      const data = await response.json();
+      if(!response.ok){
+        queueToast(data.error || 'Failed to approve teacher.', 'error', 'Unable to approve');
+        render();
+        return;
+      }
+      await loadPendingTeachersFromServer();
+      await loadUsersFromServer();
+      notifyUpdate(`${teacherName} can now sign in.`, 'success', 'Teacher approved');
+    }catch(error){
+      console.error('APPROVE TEACHER ERROR:', error);
+      queueToast('Cannot connect to the server.', 'error', 'Unable to approve');
+      render();
+    }
+  });
+}
+async function rejectTeacherSignup(teacherId, teacherName){
+  requestConfirmation({
+    title:'Reject this teacher?',
+    message:`${teacherName} will not be able to sign in.`,
+    actionLabel:'Reject'
+  }, async () => {
+    try{
+      const response = await fetch(`${API_BASE}/api/users/${teacherId}/reject`, { method: 'PUT' });
+      const data = await response.json();
+      if(!response.ok){
+        queueToast(data.error || 'Failed to reject teacher.', 'error', 'Unable to reject');
+        render();
+        return;
+      }
+      await loadPendingTeachersFromServer();
+      notifyUpdate(`${teacherName}'s request was rejected.`, 'success', 'Teacher rejected');
+    }catch(error){
+      console.error('REJECT TEACHER ERROR:', error);
+      queueToast('Cannot connect to the server.', 'error', 'Unable to reject');
+      render();
+    }
+  });
+}
+function renderAdminApprovals(){
+  return `
+    <div class="page-head"><h2>Approvals</h2><p>Review teacher sign-up requests.</p></div>
+    <div class="card teacher-directory">
+      ${PENDING_TEACHERS.length === 0 ? `<div class="empty">No pending teacher requests.</div>` : PENDING_TEACHERS.map(t => `
+        <div class="teacher-list-item">
+          <div class="person-row">${userAvatar(t)}<div><div class="person-name">${t.name}</div><div class="person-sub">@${t.username} · wants to join as a teacher</div></div></div>
+          <div class="action-row">
+            <button class="btn-sm primary" onclick="approveTeacher(${t.id}, '${t.name}')">${icon('check')}Approve</button>
+            <button class="btn-sm danger" onclick="rejectTeacherSignup(${t.id}, '${t.name}')">${icon('close')}Reject</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>`;
+}
+
 async function loadFollowsFromServer(){
   try{
     const response = await fetch(API_BASE + '/api/follows');
@@ -752,7 +827,8 @@ async function loadWorkspaceData(){
     loadUsersFromServer(),
     loadReservationsFromServer(),
     loadActivityLogsFromServer(),
-    loadFollowsFromServer()
+    loadFollowsFromServer(),
+    loadPendingTeachersFromServer()
   ]);
 }
 function setLoading(active, title, detail){
@@ -844,9 +920,10 @@ function renderLogin(){
             </div>
           </div>
           ${VIEW.err ? `<div class="err">${VIEW.err}</div>` : ''}
+          ${VIEW.notice ? `<div class="msg-banner ${VIEW.notice.type}">${VIEW.notice.text}</div>` : ''}
           ${isLogin ? renderLoginForm() : renderRegisterForm()}
           <div class="switch-line">
-            ${isLogin ? `New here? <a onclick="switchAuth('register')">Create an account</a>`
+            ${isLogin ? `Are you a teacher? <a onclick="switchAuth('register')">Sign up</a>`
                       : `Already have an account? <a onclick="switchAuth('login')">Sign in</a>`}
           </div>
         </div>  
@@ -997,6 +1074,15 @@ async function doRegister(){
             return;
         }
 
+        if(data.pending){
+            setLoading(false);
+            AUTH_MODE = 'login';
+            VIEW.err = '';
+            VIEW.notice = { type:'ok', text:'Your teacher account has been submitted. An admin needs to approve it before you can sign in.' };
+            render();
+            return;
+        }
+
         CURRENT_USER = data.user;
 
         await Promise.all([loadWorkspaceData(), wait(450)]);
@@ -1024,7 +1110,7 @@ async function doRegister(){
 /* ===================== SHELL ===================== */
 function renderShell(){
   const nav = CURRENT_USER.role==='admin'
-  ? [['rooms','Manage Rooms'],['users','Manage Users'],['reservations','Reservations'],['reports','Reports'],['info','Profile']]
+  ? [['rooms','Manage Rooms'],['users','Manage Users'],['approvals','Approvals'],['reservations','Reservations'],['reports','Reports'],['info','Profile']]
     : CURRENT_USER.role==='teacher'
 ? [['status','My Room'],['reservations','Reservations'],['scan','Scan QR'],['followers','Followers'],['info','Profile']]
     : [['search','Find Teachers'],['follows','My Follows'],['info','Profile']];
@@ -1117,6 +1203,7 @@ function unseenAcceptedFollows(){
 
 function navBadgeCount(tabKey){
   if(CURRENT_USER.role === 'admin' && tabKey === 'reservations') return pendingReservationCount();
+  if(CURRENT_USER.role === 'admin' && tabKey === 'approvals') return PENDING_TEACHERS.length;
   if(CURRENT_USER.role === 'teacher' && tabKey === 'reservations') return unseenReservationUpdates().length;
   if(CURRENT_USER.role === 'teacher' && tabKey === 'followers') return pendingFollowRequestCount();
   if(CURRENT_USER.role === 'student' && tabKey === 'follows') return unseenFollowedCheckins().length + unseenAcceptedFollows().length;
@@ -1194,6 +1281,8 @@ function renderAdmin(){
   if(VIEW.tab==='rooms') return renderAdminRooms();
 
   if(VIEW.tab==='users') return renderAdminUsers();
+
+  if(VIEW.tab==='approvals') return renderAdminApprovals();
 
   if(VIEW.tab==='reservations') return renderAdminReservations();
 
