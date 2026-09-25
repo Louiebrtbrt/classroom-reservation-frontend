@@ -296,9 +296,10 @@
   @media(max-width:660px){
     html,body{width:100%;overflow-x:hidden;}
     body{-webkit-tap-highlight-color:transparent;}
-    .login-panel{min-height:100dvh;height:100dvh;padding:0;display:flex;flex-direction:column;align-items:stretch;overflow-y:auto;}
-    .login-form{flex:1;display:flex;flex-direction:column;justify-content:center;max-width:440px;width:100%;margin:0 auto;padding:8px 19px 30px;}
-    .mobile-brand{flex:0 0 auto;position:sticky;top:0;z-index:2;margin:0;padding:18px 19px 14px;background:#fff;}
+    .login-panel{min-height:100dvh;height:100dvh;padding:0;display:flex;flex-direction:column;align-items:stretch;overflow:hidden;}
+.login-form{flex:1;display:flex;flex-direction:column;max-width:440px;width:100%;margin:0;padding:0 19px 24px;min-height:0;}
+.mobile-brand{flex:0 0 auto;margin:0 0 4px;padding:18px 0 14px;background:#fff;justify-content:flex-start;}
+.login-card{flex:1;display:flex;flex-direction:column;justify-content:center;min-height:0;}
     .switcher button{min-height:44px;font-size:14px;}
     .plate{margin-top:21px;}
     .plate-title{font-size:24px;}
