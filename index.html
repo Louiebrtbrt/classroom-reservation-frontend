@@ -1414,10 +1414,9 @@ function renderAdminUsers(){
             <td data-label="Role" style="text-transform:capitalize;">${u.role}</td>
             <td data-label="Action">
               <div class="action-row" style="justify-content:flex-end;">
-                <button class="btn-sm" onclick="openPersonModal(${u.id})">${icon('info')}View info</button>
                 ${u.username!==CURRENT_USER.username
-                  ? `<button class="btn-sm danger" onclick="deleteUser('${u.username}')">${icon('trash')}Remove</button>`
-                  : ''
+                  ? `<button class="btn-sm" onclick="openPersonModal(${u.id})">${icon('info')}View info</button><button class="btn-sm danger" onclick="deleteUser('${u.username}')">${icon('trash')}Remove</button>`
+                  : `<span class="hint">You</span>`
                 }
               </div>
             </td>
