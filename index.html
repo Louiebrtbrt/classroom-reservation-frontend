@@ -1092,6 +1092,11 @@ function markSeen(key, ids){
 function pendingReservationCount(){
   return RESERVATIONS.filter(r => r.status === 'pending').length;
 }
+
+function pendingFollowRequestCount(){
+  return FOLLOWS.filter(f => f.teacher_id === CURRENT_USER.id && f.status === 'pending').length;
+}
+
 function unseenReservationUpdates(){
   const mine = RESERVATIONS.filter(r => String(r.teacher_id) === String(CURRENT_USER.id) && (r.status === 'approved' || r.status === 'cancelled'));
   const seen = getSeenSet('reservations');
@@ -1106,6 +1111,7 @@ function unseenFollowedCheckins(){
 function navBadgeCount(tabKey){
   if(CURRENT_USER.role === 'admin' && tabKey === 'reservations') return pendingReservationCount();
   if(CURRENT_USER.role === 'teacher' && tabKey === 'reservations') return unseenReservationUpdates().length;
+  if(CURRENT_USER.role === 'teacher' && tabKey === 'followers') return pendingFollowRequestCount();
   if(CURRENT_USER.role === 'student' && tabKey === 'follows') return unseenFollowedCheckins().length;
   return 0;
 }
