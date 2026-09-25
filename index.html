@@ -1970,7 +1970,7 @@ function renderStudentSearch(){
     let action;
     if(!f) action = `<button class="btn-sm primary" onclick="followTeacher('${t.username}')">${icon('follow')}Follow</button>`;
     else if(f.status==='pending') action = `<span class="badge pending">Requested</span>`;
-    else if(f.status==='accepted') action = `<span class="badge vacant">Following</span>`;
+    else if(f.status==='accepted') action = `<button class="btn-sm danger" onclick="unfollowTeacher(${t.id})">${icon('close')}Unfollow</button>`;
     else action = `<button class="btn-sm" onclick="followTeacher('${t.username}')">${icon('follow')}Request again</button>`;
     return `
         <div class="teacher-list-item">
@@ -2000,6 +2000,34 @@ function setSearchQ(v, pos){
     input.setSelectionRange(pos, pos);
   }
 }
+
+function unfollowTeacher(teacherId){
+    const follow = FOLLOWS.find(f => f.student_id === CURRENT_USER.id && f.teacher_id === teacherId);
+    if(!follow) return;
+
+    requestConfirmation({
+        title:'Unfollow this teacher?',
+        message:`You'll no longer see ${follow.teacher_name}'s room status.`,
+        actionLabel:'Unfollow'
+    }, async () => {
+        try{
+            const response = await fetch(`${API_BASE}/api/follows/${follow.id}`, { method: 'DELETE' });
+            const data = await response.json();
+            if(!response.ok){
+                queueToast(data.error || 'Failed to unfollow.', 'error', 'Unable to unfollow');
+                render();
+                return;
+            }
+            await loadFollowsFromServer();
+            notifyUpdate(`You unfollowed ${follow.teacher_name}.`, 'success', 'Unfollowed');
+        }catch(error){
+            console.error('UNFOLLOW ERROR:', error);
+            queueToast('Cannot connect to the server.', 'error', 'Unable to unfollow');
+            render();
+        }
+    });
+}
+
 async function followTeacher(teacherUsername){
     const teacher = SERVER_USERS.find(
         u => u.username === teacherUsername
