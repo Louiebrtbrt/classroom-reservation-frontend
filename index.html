@@ -1108,11 +1108,18 @@ function unseenFollowedCheckins(){
   const seen = getSeenSet('checkins');
   return logs.filter(l => !seen.has(l.id));
 }
+
+function unseenAcceptedFollows(){
+  const mine = FOLLOWS.filter(f => f.student_id === CURRENT_USER.id && f.status === 'accepted');
+  const seen = getSeenSet('accepted-follows');
+  return mine.filter(f => !seen.has(f.id));
+}
+
 function navBadgeCount(tabKey){
   if(CURRENT_USER.role === 'admin' && tabKey === 'reservations') return pendingReservationCount();
   if(CURRENT_USER.role === 'teacher' && tabKey === 'reservations') return unseenReservationUpdates().length;
   if(CURRENT_USER.role === 'teacher' && tabKey === 'followers') return pendingFollowRequestCount();
-  if(CURRENT_USER.role === 'student' && tabKey === 'follows') return unseenFollowedCheckins().length;
+  if(CURRENT_USER.role === 'student' && tabKey === 'follows') return unseenFollowedCheckins().length + unseenAcceptedFollows().length;
   return 0;
 }
 
@@ -1129,6 +1136,7 @@ function goTab(tab){
   }
   if(tab === 'follows' && CURRENT_USER.role === 'student'){
     markSeen('checkins', unseenFollowedCheckins().map(l => l.id));
+    markSeen('accepted-follows', unseenAcceptedFollows().map(f => f.id));
   }
   persistWorkspace();
   render();
