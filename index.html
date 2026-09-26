@@ -415,6 +415,9 @@ let REG_ROLE = 'student';
 let PENDING_VERIFY_USERNAME = '';
 let REMEMBER_ME = false;
 try{ REMEMBER_ME = localStorage.getItem('crs-remember-me') === '1'; }catch(e){}
+let LAST_USERNAME = '';
+try{ LAST_USERNAME = localStorage.getItem('crs-last-username') || ''; }catch(e){}
+const REMEMBER_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 const SESSION_KEY = 'crs-workspace-session-v1';
 let PENDING_CONFIRMATION = null;
 let TOAST_TIMER = null;
@@ -812,7 +815,8 @@ function persistWorkspace(){
   const payload = JSON.stringify({
     user: CURRENT_USER,
     tab: VIEW.tab,
-    searchQ: VIEW.searchQ || ''
+    searchQ: VIEW.searchQ || '',
+    expiresAt: REMEMBER_ME ? (Date.now() + REMEMBER_DURATION_MS) : null
   });
   if(REMEMBER_ME){
     localStorage.setItem(SESSION_KEY, payload);
@@ -824,9 +828,15 @@ function persistWorkspace(){
 }
 function getPersistedWorkspace(){
   try{
-    const raw = localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
+    const fromLocal = localStorage.getItem(SESSION_KEY);
+    const raw = fromLocal || sessionStorage.getItem(SESSION_KEY);
+    if(!raw) return null;
     const saved = JSON.parse(raw);
     if(!saved || !saved.user || !saved.user.id || !saved.user.role) return null;
+    if(fromLocal && saved.expiresAt && Date.now() > saved.expiresAt){
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
     return saved;
   }catch(error){
     sessionStorage.removeItem(SESSION_KEY);
@@ -951,7 +961,7 @@ function renderLogin(){
 function renderLoginForm(){
   return `
     <form onsubmit="event.preventDefault();doLogin()">
-    <div class="field"><label>Institutional / Email</label><input id="li-user" placeholder="e.g. juandelacruz@mabinicolleges.edu.ph" autocomplete="username" autocapitalize="none" autocorrect="off" required/></div>
+     <div class="field"><label>Institutional / Email</label><input id="li-user" value="${escapeAttr(LAST_USERNAME)}" placeholder="e.g. juandelacruz@mabinicolleges.edu.ph" autocomplete="username" autocapitalize="none" autocorrect="off" required/></div>
     <div class="field">
       <label>Password</label>
       <div style="position:relative;">
@@ -1035,7 +1045,10 @@ async function doLogin(){
   }
 
   REMEMBER_ME = remember;
-  try{ localStorage.setItem('crs-remember-me', remember ? '1' : '0'); }catch(e){}
+  try{
+    localStorage.setItem('crs-remember-me', remember ? '1' : '0');
+    localStorage.setItem('crs-last-username', u);
+  }catch(e){}
 
   try{
     const response = await fetch(API_BASE + '/api/login', {
