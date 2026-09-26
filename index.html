@@ -410,8 +410,11 @@ async function loadActivityLogsFromServer(){
 let CURRENT_USER = null;
 let VIEW = { screen:'login', tab:null, err:'', notice:null, toast:null, confirm:null };
 let SCAN = { active:false, stream:null, raf:null, reserveRoomId:null };
-let AUTH_MODE = 'login'; // or 'register'
+let AUTH_MODE = 'login'; // 'login' | 'register' | 'verify'
 let REG_ROLE = 'student';
+let PENDING_VERIFY_USERNAME = '';
+let REMEMBER_ME = false;
+try{ REMEMBER_ME = localStorage.getItem('crs-remember-me') === '1'; }catch(e){}
 const SESSION_KEY = 'crs-workspace-session-v1';
 let PENDING_CONFIRMATION = null;
 let TOAST_TIMER = null;
@@ -779,6 +782,7 @@ function performLogout(){
 
   CURRENT_USER = null;
   sessionStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(SESSION_KEY);
 
   VIEW = {
     screen: 'login',
@@ -805,19 +809,28 @@ function allowedTabs(role){
 }
 function persistWorkspace(){
   if(!CURRENT_USER) return;
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+  const payload = JSON.stringify({
     user: CURRENT_USER,
     tab: VIEW.tab,
     searchQ: VIEW.searchQ || ''
-  }));
+  });
+  if(REMEMBER_ME){
+    localStorage.setItem(SESSION_KEY, payload);
+    sessionStorage.removeItem(SESSION_KEY);
+  }else{
+    sessionStorage.setItem(SESSION_KEY, payload);
+    localStorage.removeItem(SESSION_KEY);
+  }
 }
 function getPersistedWorkspace(){
   try{
-    const saved = JSON.parse(sessionStorage.getItem(SESSION_KEY));
+    const raw = localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
+    const saved = JSON.parse(raw);
     if(!saved || !saved.user || !saved.user.id || !saved.user.role) return null;
     return saved;
   }catch(error){
     sessionStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_KEY);
     return null;
   }
 }
@@ -882,6 +895,9 @@ document.addEventListener('keydown', event => {
 /* ===================== LOGIN / REGISTER ===================== */
 function renderLogin(){
   const isLogin = AUTH_MODE==='login';
+  const isVerify = AUTH_MODE==='verify';
+  const titleText = isLogin ? 'Welcome back' : isVerify ? 'Verify your email' : 'Create your account';
+  const subText = isLogin ? 'Sign in to start your session.' : isVerify ? 'Enter the code we sent you.' : 'Join your classroom workspace in a few steps.';
   return `
   <div class="login-shell">
     <aside class="brand-panel">
@@ -915,17 +931,18 @@ function renderLogin(){
             <div class="plate-num">CRS</div>
             <div>
               <div class="eyebrow">Campus operations</div>
-              <div class="plate-title">${isLogin ? 'Welcome back' : 'Create your account'}</div>
-              <div class="plate-sub">${isLogin ? 'Sign in to start your session.' : 'Join your classroom workspace in a few steps.'}</div>
+              <div class="plate-title">${titleText}</div>
+              <div class="plate-sub">${subText}</div>
             </div>
           </div>
           ${VIEW.err ? `<div class="err">${VIEW.err}</div>` : ''}
           ${VIEW.notice ? `<div class="msg-banner ${VIEW.notice.type}">${VIEW.notice.text}</div>` : ''}
-          ${isLogin ? renderLoginForm() : renderRegisterForm()}
+          ${isVerify ? renderVerifyForm() : isLogin ? renderLoginForm() : renderRegisterForm()}
+          ${!isVerify ? `
           <div class="switch-line">
-            ${isLogin ? `Are you a teacher? <a onclick="switchAuth('register')">Sign up</a>`
+            ${isLogin ? `New here? <a onclick="switchAuth('register')">Sign up</a>`
                       : `Already have an account? <a onclick="switchAuth('login')">Sign in</a>`}
-          </div>
+          </div>` : ''}
         </div>  
       </div>
     </main>
@@ -934,7 +951,7 @@ function renderLogin(){
 function renderLoginForm(){
   return `
     <form onsubmit="event.preventDefault();doLogin()">
-    <div class="field"><label>Username</label><input id="li-user" placeholder="e.g. juan.delacruz" autocomplete="username" autocapitalize="none" autocorrect="off" required/></div>
+    <div class="field"><label>Institutional / Email</label><input id="li-user" placeholder="e.g. juandelacruz@mabinicolleges.edu.ph" autocomplete="username" autocapitalize="none" autocorrect="off" required/></div>
     <div class="field">
       <label>Password</label>
       <div style="position:relative;">
@@ -942,6 +959,9 @@ function renderLoginForm(){
          <button type="button" id="li-pass-toggle" onclick="toggleLoginPasswordVisibility()" aria-label="Show password" style="position:absolute;right:2px;top:50%;transform:translateY(-50%);border:0;background:transparent;padding:8px;cursor:pointer;color:var(--ink-soft);display:grid;place-items:center;">${icon('eyeoff')}</button>
       </div>
     </div>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:12.5px;color:var(--ink-soft);cursor:pointer;">
+      <input type="checkbox" id="li-remember" style="width:auto;min-height:0;" ${REMEMBER_ME ? 'checked' : ''}/> Remember me
+    </label>
     <button class="btn-primary" type="submit">Sign in to workspace</button>
 </form>
   `;
@@ -949,18 +969,30 @@ function renderLoginForm(){
 function renderRegisterForm(){
   return `
     <form onsubmit="event.preventDefault();doRegister()">
-    <div class="field"><label>Full name</label><input id="rg-name" value="${escapeAttr(REG_DRAFT.name)}" placeholder="Juan Dela Cruz" autocomplete="name" required/></div>
-    <div class="field"><label>Username</label><input id="rg-user" value="${escapeAttr(REG_DRAFT.username)}" placeholder="juan.delacruz" autocomplete="username" autocapitalize="none" autocorrect="off" required/></div>
-    <div class="field"><label>Password</label><input id="rg-pass" type="password" value="${escapeAttr(REG_DRAFT.password)}" placeholder="Create a password" autocomplete="new-password" required/></div>
-        <div class="field">
+    <div class="field">
       <label>I am a</label>
       <div class="role-pick">
         <button type="button" class="${REG_ROLE==='student'?'active':''}" onclick="setRegRole('student')">Student</button>
         <button type="button" class="${REG_ROLE==='teacher'?'active':''}" onclick="setRegRole('teacher')">Teacher</button>
       </div>
     </div>
-    <button class="btn-primary" type="submit">Create account</button>
+    <div class="field"><label>Complete Name</label><input id="rg-name" value="${escapeAttr(REG_DRAFT.name)}" placeholder="Juan Dela Cruz" autocomplete="name" required/></div>
+    <div class="field"><label>${REG_ROLE==='student' ? 'Institutional Email' : 'Email'}</label><input id="rg-email" type="email" value="${escapeAttr(REG_DRAFT.email)}" placeholder="${REG_ROLE==='student' ? 'e.g. juandelacruz@mabinicolleges.edu.ph' : 'e.g. juan.delacruz@email.com'}" autocomplete="email" autocapitalize="none" autocorrect="off" required/></div>
+    ${REG_ROLE==='teacher' ? `<div class="field"><label>Class Subject</label><input id="rg-subject" value="${escapeAttr(REG_DRAFT.subject)}" placeholder="e.g. Mathematics" required/></div>` : ''}
+    <div class="field"><label>Password</label><input id="rg-pass" type="password" value="${escapeAttr(REG_DRAFT.password)}" placeholder="Create a password" autocomplete="new-password" required/></div>
+    <div class="field"><label>Confirm Password</label><input id="rg-pass-confirm" type="password" value="${escapeAttr(REG_DRAFT.confirmPassword)}" placeholder="Re-enter your password" autocomplete="new-password" required/></div>
+    <button class="btn-primary" type="submit">${REG_ROLE==='student' ? 'Send verification code' : 'Create account'}</button>
     </form>
+  `;
+}
+function renderVerifyForm(){
+  return `
+    <form onsubmit="event.preventDefault();doVerifyCode()">
+    <p class="hint" style="margin-bottom:14px;">We sent a 6-digit code to <strong>${escapeAttr(PENDING_VERIFY_USERNAME||'')}</strong>. Enter it below to finish creating your account.</p>
+    <div class="field"><label>Verification code</label><input id="vf-code" placeholder="123456" inputmode="numeric" maxlength="6" required/></div>
+    <button class="btn-primary" type="submit">Verify and sign in</button>
+    </form>
+    <div class="switch-line"><a onclick="switchAuth('register')">Back to sign up</a></div>
   `;
 }
 
@@ -974,15 +1006,19 @@ function toggleLoginPasswordVisibility(){
   btn.setAttribute('aria-label', willShow ? 'Hide password' : 'Show password');
 }
 
-function switchAuth(mode){ AUTH_MODE=mode; VIEW.err=''; render(); }
-let REG_DRAFT = { name:'', username:'', password:'' };
+function switchAuth(mode){ AUTH_MODE=mode; VIEW.err=''; VIEW.notice=null; render(); }
+let REG_DRAFT = { name:'', email:'', password:'', confirmPassword:'', subject:'' };
 function setRegRole(r){
   const nameInput = document.getElementById('rg-name');
-  const userInput = document.getElementById('rg-user');
+  const emailInput = document.getElementById('rg-email');
   const passInput = document.getElementById('rg-pass');
+  const passConfirmInput = document.getElementById('rg-pass-confirm');
+  const subjectInput = document.getElementById('rg-subject');
   if(nameInput) REG_DRAFT.name = nameInput.value;
-  if(userInput) REG_DRAFT.username = userInput.value;
+  if(emailInput) REG_DRAFT.email = emailInput.value;
   if(passInput) REG_DRAFT.password = passInput.value;
+  if(passConfirmInput) REG_DRAFT.confirmPassword = passConfirmInput.value;
+  if(subjectInput) REG_DRAFT.subject = subjectInput.value;
   REG_ROLE = r;
   render();
 }
@@ -990,12 +1026,16 @@ function setRegRole(r){
 async function doLogin(){
   const u = document.getElementById('li-user').value.trim();
   const p = document.getElementById('li-pass').value;
+  const remember = document.getElementById('li-remember').checked;
 
   if(!u || !p){
     VIEW.err = 'Please enter your username and password.';
     render();
     return;
   }
+
+  REMEMBER_ME = remember;
+  try{ localStorage.setItem('crs-remember-me', remember ? '1' : '0'); }catch(e){}
 
   try{
     const response = await fetch(API_BASE + '/api/login', {
@@ -1033,70 +1073,83 @@ async function doLogin(){
     render();
   }
 }
+
 async function doRegister(){
 
     const name = document.getElementById('rg-name').value.trim();
-    const u = document.getElementById('rg-user').value.trim();
+    const email = document.getElementById('rg-email').value.trim();
     const p = document.getElementById('rg-pass').value;
+    const pConfirm = document.getElementById('rg-pass-confirm').value;
 
-    if(!name || !u || !p){
+    if(!name || !email || !p || !pConfirm){
         VIEW.err = 'Please fill in every field.';
         render();
         return;
     }
 
-    if(REG_ROLE === 'admin'){
-        const code = document.getElementById('rg-code').value.trim();
-
-        if(code !== 'ADMIN-2026'){
-            VIEW.err = 'That admin registration code is incorrect.';
-            render();
-            return;
-        }
+    if(p !== pConfirm){
+        VIEW.err = 'Passwords do not match.';
+        render();
+        return;
     }
 
     try {
 
+        if(REG_ROLE === 'student'){
+            setLoading(true, 'Verifying your account', 'Sending a verification code to your email.');
+            render();
+
+            const response = await fetch(API_BASE + '/api/register/student', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, email, password: p, confirmPassword: pConfirm })
+            });
+            const data = await response.json();
+
+            setLoading(false);
+
+            if(!response.ok){
+                VIEW.err = data.error || 'Registration failed.';
+                render();
+                return;
+            }
+
+            PENDING_VERIFY_USERNAME = data.username;
+            AUTH_MODE = 'verify';
+            VIEW.err = '';
+            render();
+            return;
+        }
+
+        const subject = document.getElementById('rg-subject').value.trim();
+        if(!subject){
+            VIEW.err = 'Please fill in every field.';
+            render();
+            return;
+        }
+
         setLoading(true, 'Creating your workspace', 'Setting up your account.');
         render();
 
-        const response = await fetch(API_BASE + '/api/register', {
+        const response = await fetch(API_BASE + '/api/register/teacher', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, username: u, password: p, role: REG_ROLE })
+            body: JSON.stringify({ name, email, password: p, confirmPassword: pConfirm, class_subject: subject })
         });
         const data = await response.json();
 
+        setLoading(false);
+
         if(!response.ok){
-            setLoading(false);
             VIEW.err = data.error || 'Registration failed.';
             render();
             return;
         }
 
-        if(data.pending){
-            setLoading(false);
-            AUTH_MODE = 'login';
-            VIEW.err = '';
-            VIEW.notice = { type:'ok', text:'Your teacher account has been submitted. An admin needs to approve it before you can sign in.' };
-            render();
-            return;
-        }
-
-        CURRENT_USER = data.user;
-
-        await Promise.all([loadWorkspaceData(), wait(450)]);
-
-        setLoading(false);
-        VIEW = {
-            screen: CURRENT_USER.role,
-            tab: defaultTab(CURRENT_USER.role),
-            err: ''
-        };
-
-        persistWorkspace();
+        AUTH_MODE = 'login';
+        VIEW.err = '';
+        VIEW.notice = { type:'ok', text: data.message };
         render();
-        startPolling();
 
     } catch(error) {
 
@@ -1106,6 +1159,54 @@ async function doRegister(){
         VIEW.err = 'Cannot connect to the server.';
         render();
     }
+}
+
+async function doVerifyCode(){
+  const code = document.getElementById('vf-code').value.trim();
+  if(!code){
+    VIEW.err = 'Please enter the code.';
+    render();
+    return;
+  }
+
+  try{
+    setLoading(true, 'Verifying your account', 'Checking your code.');
+    render();
+
+    const response = await fetch(API_BASE + '/api/verify-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: PENDING_VERIFY_USERNAME, code })
+    });
+    const data = await response.json();
+
+    if(!response.ok){
+      setLoading(false);
+      VIEW.err = data.error || 'Verification failed.';
+      render();
+      return;
+    }
+
+    CURRENT_USER = data.user;
+    await Promise.all([loadWorkspaceData(), wait(450)]);
+
+    setLoading(false);
+    VIEW = {
+      screen: CURRENT_USER.role,
+      tab: defaultTab(CURRENT_USER.role),
+      err: ''
+    };
+
+    persistWorkspace();
+    render();
+    startPolling();
+
+  }catch(error){
+    console.error('VERIFY CODE ERROR:', error);
+    setLoading(false);
+    VIEW.err = 'Cannot connect to the server.';
+    render();
+  }
 }
 /* ===================== SHELL ===================== */
 function renderShell(){
@@ -1272,7 +1373,46 @@ function renderInformation(){
           <button class="btn-primary" type="submit">${icon('save')}Save information</button>
         </div>
       </div>
-    </form>`;
+    </form>
+    <div class="card" style="max-width:760px;margin-top:16px;">
+      <div class="eyebrow" style="margin-bottom:14px;">Change password</div>
+      <form onsubmit="event.preventDefault();changePassword()">
+        <div class="field"><label for="pw-current">Current password</label><input id="pw-current" type="password" autocomplete="current-password" required></div>
+        <div class="field"><label for="pw-new">New password</label><input id="pw-new" type="password" autocomplete="new-password" required></div>
+        <div class="field"><label for="pw-confirm">Confirm new password</label><input id="pw-confirm" type="password" autocomplete="new-password" required></div>
+        <div id="password-message" aria-live="polite"></div>
+        <button class="btn-primary" type="submit" style="width:auto;min-width:160px;">${icon('save')}Change password</button>
+      </form>
+    </div>`;
+}
+async function changePassword(){
+  const user = currentUserRecord();
+  const currentInput = document.getElementById('pw-current');
+  const newInput = document.getElementById('pw-new');
+  const confirmInput = document.getElementById('pw-confirm');
+
+  if(newInput.value !== confirmInput.value){
+    setInlineMessage('password-message', 'err', 'New passwords do not match.');
+    return;
+  }
+
+  try{
+    const response = await fetch(`${API_BASE}/api/users/${user.id}/password`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword: currentInput.value, newPassword: newInput.value })
+    });
+    const data = await response.json();
+    if(!response.ok){
+      setInlineMessage('password-message', 'err', data.error || 'Failed to change password.');
+      return;
+    }
+    currentInput.value = ''; newInput.value = ''; confirmInput.value = '';
+    setInlineMessage('password-message', 'ok', 'Password changed successfully.');
+  }catch(error){
+    console.error('CHANGE PASSWORD ERROR:', error);
+    setInlineMessage('password-message', 'err', 'Cannot connect to the server.');
+  }
 }
 
 /* ===================== ADMIN ===================== */
@@ -1452,6 +1592,7 @@ function renderPersonModal(){
   const person = SERVER_USERS.find(u => String(u.id) === String(VIEW.personModalId));
   if(!person) return '';
   const details = [];
+  if(person.username) details.push(['Email', person.username]);
   if(person.role === 'teacher' && person.class_subject) details.push(['Subject', person.class_subject]);
   if(person.role === 'student'){
     if(person.student_id) details.push(['Student ID', person.student_id]);
@@ -1503,7 +1644,7 @@ function renderAdminUsers(){
   <div class="page-head"><h2>Manage Users</h2><p>Everyone registered in the system.</p></div>
   <div class="card table-card">
     <table class="responsive-table user-table">
-      <thead><tr><th>Name</th><th>Username</th><th>Role</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr></thead>
       <tbody>
         ${users.map(u=>`
           <tr>
@@ -2318,6 +2459,18 @@ function startPolling(){
     await loadReservationsFromServer();
     await loadActivityLogsFromServer();
     await loadFollowsFromServer();
+    await loadUsersFromServer();
+    if(CURRENT_USER.role === 'admin'){
+      await loadPendingTeachersFromServer();
+    }
+
+    if(CURRENT_USER && !SERVER_USERS.some(u => String(u.id) === String(CURRENT_USER.id))){
+      performLogout();
+      AUTH_MODE = 'login';
+      VIEW.err = "You've been removed by the admin.";
+      render();
+      return;
+    }
 
     render();
   }, 4000);
